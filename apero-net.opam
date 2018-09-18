@@ -23,5 +23,10 @@ depends: [
   "uuidm" 
   "yojson"
   "lwt_ppx"
-  "apero_core" >= "0.3.0"
+  "apero_core" {>= "0.3.0"}
 ]
+
+synopsis : "OCaml Networking Library"
+description: """
+apero-net is collection of OCaml libraries that simplify the task of writing
+network protocol and network services."""
