@@ -23,7 +23,7 @@ depends: [
   "uuidm" 
   "yojson"
   "lwt_ppx"
-  "apero_core" {>= "0.3.0"}
+  "apero-core" {>= "0.3.0"}
 ]
 
 synopsis : "OCaml Networking Library"
