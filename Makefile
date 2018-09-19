@@ -3,7 +3,8 @@
 BUILD_LIB=dune build	
 BUILD_EXAMPLE=\
 	dune build example/echo/echo.exe \
-    example/echoes/echo.exe 
+    example/echoes/echo.exe  \
+	example/secho/secho.exe  \
 
 CLEAN= dune clean
 TEST=dune runtest -j1 --no-buffer

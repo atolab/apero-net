@@ -5,4 +5,5 @@ include Locator
 include Net
 include TcpService
 include TcpServiceES
+include NetServiceTcp
 
