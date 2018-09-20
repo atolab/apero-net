@@ -43,7 +43,7 @@ module NetServiceTcp = struct
   module Make (MVar : MVar)  = struct     
     module Config = TcpConfig
     open NetService 
-    type io_service = Session.t -> unit -> unit Lwt.t
+    type io_service = TxSession.t -> unit -> unit Lwt.t
     type svc_state = [`Run | `CloseSession | `StopService]
 
     module ConnectionMap = Map.Make(Id)
@@ -102,7 +102,7 @@ module NetServiceTcp = struct
       let s : svc_state = `CloseSession in 
       let close_session () = Lwt.wakeup notifier s; Lwt.return_unit in 
         
-      let sctx = Session.make ~close:(close_session) ~mtu:Unlimited sid sock in      
+      let sctx = TxSession.make ~close:(close_session) ~mtu:Unlimited sid sock in      
 
       let mio_svc = io_svc sctx in     
 
@@ -195,7 +195,7 @@ module NetServiceTcp = struct
         let s : svc_state = `CloseSession in 
         let close_session () = Lwt.wakeup notifier s; Lwt.return_unit in 
           
-        let sctx = Session.make ~close:(close_session) ~mtu:Unlimited sid sock in      
+        let sctx = TxSession.make ~close:(close_session) ~mtu:Unlimited sid sock in      
 
         let mio_svc = io_svc sctx in     
 

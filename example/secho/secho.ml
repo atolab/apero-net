@@ -45,8 +45,8 @@ let writer sock =
     Lwt.return_unit
   | _ -> Lwt.return_unit
   
-let run_echo_service reader writer (svc:EchoService.t) (sex : Session.t) =
-  let sock = Session.socket sex in 
+let run_echo_service reader writer (svc:EchoService.t) (sex : TxSession.t) =
+  let sock = TxSession.socket sex in 
   let mreader = reader sock in 
   let mwriter = writer sock in 
   fun () -> 
@@ -55,7 +55,7 @@ let run_echo_service reader writer (svc:EchoService.t) (sex : Session.t) =
       | Ok msg -> (match msg with 
         | Message.Msg _ as msg -> mwriter msg 
         | Message.Stop -> EchoService.stop svc 
-        | Message.Close -> Session.close sex
+        | Message.Close -> TxSession.close sex
           (* let e : Apero.error = `ClosedSession `NoMsg in 
           Lwt.fail @@ Exception e *)
         | _ -> Lwt.return_unit) 

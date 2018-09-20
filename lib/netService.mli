@@ -1,19 +1,23 @@
+(* open Iobuf
+open Atypes
+open Common *)
 
 type mtu = Unlimited | Limited of int
 
 module Id : Id.S
 
-module Session : sig                 
+module TxSession : sig                 
   type t     
   val make : close:(unit -> unit Lwt.t) -> mtu:mtu -> Id.t -> Lwt_unix.file_descr -> t
   val mtu : t -> mtu                         
   val socket : t -> Lwt_unix.file_descr
   val close : t -> unit Lwt.t
+  val id : t -> Id.t
 end
 
 
 module type S = sig           
-  type io_service = Session.t -> unit -> unit Lwt.t
+  type io_service = TxSession.t -> unit -> unit Lwt.t
   type config 
   type t                      
   val make : config -> t
@@ -22,8 +26,50 @@ module type S = sig
   val stop : t -> unit Lwt.t 
   val config : t -> config 
   val socket : t -> Lwt_unix.file_descr
-  val open_session : t -> io_service -> Locator.Locator.t -> Session.t Lwt.t 
+  val open_session : t -> io_service -> Locator.Locator.t -> TxSession.t Lwt.t 
 
 end
 
+(* 
 
+module TxF : sig 
+  module type CoDec = sig 
+    type t
+    type msg
+    val encode : t -> msg -> IOBuf.t -> (IOBuf.t, error) Result.t
+    val decode : t -> IOBuf.t -> (msg * IOBuf.t, error) Result.t
+  end
+  module type Session = sig 
+    type t 
+    type msg
+    val mtu : t -> mtu
+    val send : t -> msg -> unit Lwt.t
+    val recv : t ->  msg Lwt.t
+    val close : t -> unit Lwt.t 
+  end
+
+  module type SessionHandler = sig 
+    type t
+    type session
+    val handle_open : t -> session -> unit Lwt.t
+    val handle_close : t -> session -> unit Lwt.t
+    val handle_message : t -> session ->  unit Lwt.t
+  end 
+  module type S = sig 
+    type session   
+    type config 
+    type t                      
+    type session_handler = session -> unit Lwt.t
+    val make : config -> t
+    val mtu : mtu                         
+    val start : t -> session_handler -> unit Lwt.t 
+    val stop : t -> unit Lwt.t 
+    val config : t -> config 
+    val socket : t -> Lwt_unix.file_descr
+    val open_session : t -> Locator.Locator.t -> session Lwt.t 
+  end
+end
+
+
+
+             *)

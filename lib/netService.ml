@@ -1,9 +1,12 @@
+(* open Iobuf
+open Atypes
+open Common *)
 
 type mtu = Unlimited | Limited of int
 
 module Id = Id.Make (Int64)
 
-module Session = struct
+module TxSession = struct
   type t = 
     { sock : Lwt_unix.file_descr
     ; close : unit -> unit Lwt.t
@@ -14,10 +17,11 @@ module Session = struct
   let mtu s = s.mtu 
   let socket s = s.sock
   let close s = s.close ()
+  let id s = s.sid
 end
 
 module type S = sig         
-  type io_service = Session.t -> unit -> unit Lwt.t
+  type io_service = TxSession.t -> unit -> unit Lwt.t
   type config 
   type t                      
   val make : config -> t
@@ -26,5 +30,23 @@ module type S = sig
   val stop : t -> unit Lwt.t 
   val config : t -> config 
   val socket : t -> Lwt_unix.file_descr
-  val open_session : t -> io_service -> Locator.Locator.t -> Session.t Lwt.t 
+  val open_session : t -> io_service -> Locator.Locator.t -> TxSession.t Lwt.t 
 end
+(* 
+
+module TxSessionF = struct
+  module type CoDec = sig 
+    type t
+    type msg
+    val encode : t -> msg -> IOBuf.t -> (IOBuf.t, error) Result.t
+    val decode : t -> IOBuf.t -> (msg * IOBuf.t, error) Result.t
+  end
+  module type S = sig 
+    type t 
+    type msg
+    val mtu : t -> mtu
+    val send : t -> msg -> unit Lwt.t
+    val recv : t ->  msg Lwt.t
+    val close : t -> unit Lwt.t 
+  end
+end *)
