@@ -99,10 +99,11 @@ module NetServiceTcp = struct
     let serve_connection (sock:Lwt_unix.file_descr) (svc:t) (sid: Id.t) (io_svc: io_service) =       
       let%lwt _ = Logs_lwt.debug (fun m -> m "Serving session with Id: %s" (Id.show sid)) in 
       let (wait_close, notifier)  = Lwt.wait () in 
+      let (wait_remote_close, notify_remote_close)  = Lwt.wait () in 
       let s : svc_state = `CloseSession in 
       let close_session () = Lwt.wakeup notifier s; Lwt.return_unit in 
-        
-      let sctx = TxSession.make ~close:(close_session) ~mtu:Unlimited sid sock in      
+
+      let sctx = TxSession.make ~close:(close_session) ~wait_on_close:(wait_remote_close) ~mtu:Unlimited sid sock in      
 
       let mio_svc = io_svc sctx in     
 
@@ -118,6 +119,7 @@ module NetServiceTcp = struct
       in 
       Lwt.catch (fun () -> loop ()) 
         (fun exn -> 
+           Lwt.wakeup notify_remote_close true;
            unregister_connection svc sid 
            >>= fun _ -> 
            Logs_lwt.warn (fun m -> m "Closing session %s because of: %s " (Id.to_string sid) (Printexc.to_string exn)))  
@@ -194,8 +196,10 @@ module NetServiceTcp = struct
         let (wait_close, notifier)  = Lwt.wait () in 
         let s : svc_state = `CloseSession in 
         let close_session () = Lwt.wakeup notifier s; Lwt.return_unit in 
-          
-        let sctx = TxSession.make ~close:(close_session) ~mtu:Unlimited sid sock in      
+        
+        let (wait_remote_close, notify_remote_close)  = Lwt.wait () in 
+  
+        let sctx = TxSession.make ~close:(close_session) ~wait_on_close:wait_remote_close ~mtu:Unlimited sid sock in      
 
         let mio_svc = io_svc sctx in     
 
@@ -207,8 +211,15 @@ module NetServiceTcp = struct
           | _ ->  
             unregister_connection svc sid 
             >>= fun _ -> Logs_lwt.info (fun m -> m "Closing session %s " (Id.to_string sid))          
-          
-        in let _ = loop () in Lwt.return sctx
+
+        in let _ = Lwt.catch (fun () -> loop ()) 
+        (fun exn -> 
+           Lwt.wakeup notify_remote_close true;
+           unregister_connection svc sid 
+           >>= fun _ -> 
+           Logs_lwt.warn (fun m -> m "Closing session %s because of: %s " (Id.to_string sid) (Printexc.to_string exn)))  
+  
+        in Lwt.return sctx
           
       
       | Error e -> Lwt.fail @@ Exception e

@@ -11,13 +11,14 @@ module TxSession = struct
     { sock : Lwt_unix.file_descr
     ; close : unit -> unit Lwt.t
     ; mtu : mtu 
-    ; sid : Id.t }
-
-  let make ~close ~mtu sid sock = { sock; close; mtu; sid }  
+    ; sid : Id.t 
+    ; wait_on_close : bool Lwt.t}
+  let make ~close ~wait_on_close ~mtu sid sock = { sock; close; mtu; sid; wait_on_close }  
   let mtu s = s.mtu 
   let socket s = s.sock
   let close s = s.close ()
   let id s = s.sid
+  let when_closed s = s.wait_on_close
 end
 
 module type S = sig         

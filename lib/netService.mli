@@ -8,11 +8,12 @@ module Id : Id.S
 
 module TxSession : sig                 
   type t     
-  val make : close:(unit -> unit Lwt.t) -> mtu:mtu -> Id.t -> Lwt_unix.file_descr -> t
+  val make : close:(unit -> unit Lwt.t) -> wait_on_close:bool  Lwt.t -> mtu:mtu -> Id.t -> Lwt_unix.file_descr -> t
   val mtu : t -> mtu                         
   val socket : t -> Lwt_unix.file_descr
   val close : t -> unit Lwt.t
   val id : t -> Id.t
+  val when_closed : t -> bool Lwt.t
 end
 
 
