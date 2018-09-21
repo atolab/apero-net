@@ -119,10 +119,10 @@ module NetServiceTcp = struct
       in 
       Lwt.catch (fun () -> loop ()) 
         (fun exn -> 
-           Lwt.wakeup notify_remote_close true;
-           unregister_connection svc sid 
-           >>= fun _ -> 
-           Logs_lwt.warn (fun m -> m "Closing session %s because of: %s " (Id.to_string sid) (Printexc.to_string exn)))  
+          Lwt.wakeup_later notify_remote_close true;
+          unregister_connection svc sid 
+          >>= fun _ -> 
+          Logs_lwt.warn (fun m -> m "Closing session %s because of peer disconnection" (Id.to_string sid)))  
 
     let make config  = 
       let socket = create_server_socket config in 
