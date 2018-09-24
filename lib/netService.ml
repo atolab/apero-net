@@ -31,7 +31,7 @@ module type S = sig
   val stop : t -> unit Lwt.t 
   val config : t -> config 
   val socket : t -> Lwt_unix.file_descr
-  val open_session : t -> io_service -> Locator.Locator.t -> TxSession.t Lwt.t 
+  val establish_session : t -> Locator.Locator.t -> TxSession.t Lwt.t 
 end
 (* 
 

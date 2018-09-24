@@ -55,7 +55,8 @@ module NetServiceTcp = struct
     ; max_connections : Int64.t 
     ; connections_count : Int64.t MVar.t
     ; connections : (Lwt_unix.file_descr ConnectionMap.t) MVar.t
-    ; config : Config.t}
+    ; config : Config.t
+    ; io_svc : io_service MVar.t }
 
     let mtu = Unlimited
 
@@ -96,8 +97,40 @@ module NetServiceTcp = struct
       let%lwt _ = MVar.put svc.connections ConnectionMap.empty in 
       Lwt.join @@ ConnectionMap.fold (fun _ sock xs -> (Net.safe_close sock)::xs) connections []
 
-    let serve_connection (sock:Lwt_unix.file_descr) (svc:t) (sid: Id.t) (io_svc: io_service) =       
+    let make_connection_context (sock:Lwt_unix.file_descr) (svc:t) (sid: Id.t) (io_svc: io_service) =       
       let%lwt _ = Logs_lwt.debug (fun m -> m "Serving session with Id: %s" (Id.show sid)) in 
+      let (wait_close, notifier)  = Lwt.wait () in 
+      let (wait_remote_close, notify_remote_close)  = Lwt.wait () in 
+      let s : svc_state = `CloseSession in 
+      let close_session () = Lwt.wakeup notifier s; Lwt.return_unit in 
+
+      let sctx = TxSession.make ~close:(close_session) ~wait_on_close:(wait_remote_close) ~mtu:Unlimited sid sock in      
+
+      let serve = fun () ->
+        let mio_svc = io_svc sctx in     
+
+        let rec loop () = 
+          let r : svc_state = `Run in
+          let continue = mio_svc () >>= fun () -> Lwt.return r in 
+          Lwt.choose [continue; wait_close] >>= function 
+          | `Run -> loop ()
+          | _ ->  
+            unregister_connection svc sid 
+            >>= fun _ -> Logs_lwt.info (fun m -> m "Closing session %s " (Id.to_string sid))          
+          
+        in 
+        Lwt.catch (fun () -> loop ()) 
+          (fun _ -> 
+            Lwt.wakeup_later notify_remote_close true;
+            unregister_connection svc sid 
+            >>= fun _ -> 
+            Logs_lwt.warn (fun m -> m "Closing session %s because of peer disconnection" (Id.to_string sid)))  
+      in Lwt.return (sctx, serve)
+
+    let serve_connection (sock:Lwt_unix.file_descr) (svc:t) (sid: Id.t) (io_svc: io_service) =   
+      let%lwt (_, serve) = make_connection_context sock svc sid io_svc in serve ()
+      
+      (* let%lwt _ = Logs_lwt.debug (fun m -> m "Serving session with Id: %s" (Id.show sid)) in 
       let (wait_close, notifier)  = Lwt.wait () in 
       let (wait_remote_close, notify_remote_close)  = Lwt.wait () in 
       let s : svc_state = `CloseSession in 
@@ -118,11 +151,11 @@ module NetServiceTcp = struct
         
       in 
       Lwt.catch (fun () -> loop ()) 
-        (fun exn -> 
+        (fun _ -> 
           Lwt.wakeup_later notify_remote_close true;
           unregister_connection svc sid 
           >>= fun _ -> 
-          Logs_lwt.warn (fun m -> m "Closing session %s because of peer disconnection" (Id.to_string sid)))  
+          Logs_lwt.warn (fun m -> m "Closing session %s because of peer disconnection" (Id.to_string sid)))   *)
 
     let make config  = 
       let socket = create_server_socket config in 
@@ -134,7 +167,8 @@ module NetServiceTcp = struct
       ; max_connections = Int64.of_int (Config.max_connectiosn config)
       ; connections_count = MVar.create Int64.zero
       ; connections = MVar.create (ConnectionMap.empty) 
-      ; config } 
+      ; config 
+      ; io_svc = MVar.create_empty ()} 
 
 
 
@@ -144,6 +178,7 @@ module NetServiceTcp = struct
                            (TcpLocator.to_string @@ Config.locator svc.config) 
                            (Config.svc_id svc.config)) in 
 
+      let%lwt _ = MVar.put svc.io_svc io_svc in 
       let stop = svc.waiter >|= fun () -> `Stop in 
 
       let rec accept_connection svc =         
@@ -151,7 +186,7 @@ module NetServiceTcp = struct
           (fun () ->
              let%lwt _ = Logs_lwt.debug (fun m -> m "TcpService ready to accept connection" ) in   
              let accept = Lwt_unix.accept svc.socket >|= (fun v -> `Accept v) in 
-             Lwt.pick [accept ; stop] >|= (function
+             Lwt.choose [accept ; stop] >|= (function
                  | `Stop -> `Stop 
                  | `Accept _ as a -> a))
           (function 
@@ -184,50 +219,25 @@ module NetServiceTcp = struct
 
     let config svc = svc.config
 
-    let create_tcp_session (svc:t)  (io_svc: io_service) locator =  
+    let establish_tcp_session svc tcp_locator = 
       let open Lwt_unix in      
+      let open Lwt.Infix in 
       let sock = socket PF_INET SOCK_STREAM 0 in      
-      let saddr = IpEndpoint.to_sockaddr @@ TcpLocator.endpoint locator in      
-      match%lwt register_connection svc sock with 
+      let saddr = IpEndpoint.to_sockaddr @@ TcpLocator.endpoint tcp_locator in   
+      let psid = connect sock saddr >>= fun () -> register_connection svc sock in 
+      match%lwt psid with 
       | Ok sid -> 
-        let%lwt _ = Lwt_unix.connect sock saddr in       
-        let%lwt _ = Logs_lwt.debug (fun m -> m "Established session with Id: %s to %s" (Id.show sid) (TcpLocator.to_string locator)) in 
-        
-        let (wait_close, notifier)  = Lwt.wait () in 
-        let s : svc_state = `CloseSession in 
-        let close_session () = Lwt.wakeup notifier s; Lwt.return_unit in 
-        
-        let (wait_remote_close, notify_remote_close)  = Lwt.wait () in 
-  
-        let sctx = TxSession.make ~close:(close_session) ~wait_on_close:wait_remote_close ~mtu:Unlimited sid sock in      
-
-        let mio_svc = io_svc sctx in     
-
-        let rec loop () = 
-          let r : svc_state = `Run in
-          let continue = mio_svc () >>= fun () -> Lwt.return r in 
-          Lwt.choose [continue; wait_close] >>= function 
-          | `Run -> loop ()
-          | _ ->  
-            unregister_connection svc sid 
-            >>= fun _ -> Logs_lwt.info (fun m -> m "Closing session %s " (Id.to_string sid))          
-
-        in let _ = Lwt.catch (fun () -> loop ()) 
-        (fun exn -> 
-           Lwt.wakeup notify_remote_close true;
-           unregister_connection svc sid 
-           >>= fun _ -> 
-           Logs_lwt.warn (fun m -> m "Closing session %s because of: %s " (Id.to_string sid) (Printexc.to_string exn)))  
-  
-        in Lwt.return sctx
-          
+        let%lwt io_svc = MVar.read svc.io_svc in 
+        let%lwt (txs, serve) = make_connection_context sock svc sid io_svc in 
+        let _ = serve () in Lwt.return txs          
       
       | Error e -> Lwt.fail @@ Exception e
 
-    open Locator
-    let open_session svc io_svc  = function     
-    | Locator.TcpLocator tl -> create_tcp_session svc io_svc tl    
-    | _ -> Lwt.fail_with "Invalid Locator"
+    let establish_session (svc:t) locator =  
+      match locator with 
+      | Locator.Locator.TcpLocator tcplocator -> establish_tcp_session svc tcplocator      
+      |_ ->  Lwt.fail_with "Invalid Locator"
+    
   end
 
 end
