@@ -6,7 +6,14 @@ let read_all sock buf =
   let opos = IOBuf.position buf in 
   let tlen = (IOBuf.limit buf) - opos in   
   let rec do_read alen buf =     
-    Lwt_bytes.read sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf)
+    (try 
+      let%lwt _ = Logs_lwt.debug (fun m -> m "Buffer: %s" (IOBuf.to_string buf)) in 
+      Lwt_bytes.read sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf)
+    with 
+    | e -> 
+      let%lwt _ = Logs_lwt.warn (fun m -> m "Read failed on socket with %s" (Printexc.to_string e)) in
+      Lwt.fail e
+    )
     >>= fun n ->       
       let alen' = alen + n in 
       let%lwt _ = Logs_lwt.debug (fun m -> m "Net.read_all: Read %d out of %d bytes" alen' tlen) in
