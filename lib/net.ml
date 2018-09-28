@@ -1,7 +1,26 @@
 open Apero
 open Lwt
 
-let read sock buf = Lwt_bytes.read sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf)
+let read_all sock buf = 
+  let open Lwt.Infix in
+  let opos = IOBuf.position buf in 
+  let tlen = (IOBuf.limit buf) - opos in   
+  let rec do_read alen buf =     
+    Lwt_bytes.read sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf)
+    >>= fun n ->       
+      let alen' = alen + n in 
+      let%lwt _ = Logs_lwt.debug (fun m -> m "Net.read_all: Read %d out of %d bytes" alen' tlen) in
+      if alen' = tlen then Lwt.return tlen 
+      else 
+        begin
+          let b = IOBuf.set_position_unsafe (opos + alen') buf  in
+          do_read alen' b
+        end
+  in 
+    do_read 0 buf
+
+(* let read sock buf = Lwt_bytes.read sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf) *)
+let read = read_all
 
 let write sock buf = Lwt_bytes.write sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf)
 

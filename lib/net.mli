@@ -2,8 +2,13 @@ open Apero
 
 (** I/O related functions *)
 
+
 val read : Lwt_unix.file_descr -> IOBuf.t -> int Lwt.t
 (** [read] at most (limit -pos) bytes out of the file descriptior in to
+    the IOBuf. Returns the  actual number of bytes read. *)
+
+val read_all : Lwt_unix.file_descr -> IOBuf.t -> int Lwt.t
+(** [read] (limit -pos) bytes out of the file descriptior in to
     the IOBuf. Returns the  actual number of bytes read. *)
 
 
