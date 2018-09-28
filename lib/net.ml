@@ -2,29 +2,17 @@ open Apero
 open Lwt
 
 let read_all sock buf = 
-  let open Lwt.Infix in
-  let opos = IOBuf.position buf in 
-  let tlen = (IOBuf.limit buf) - opos in   
-  let rec do_read alen buf =     
-    (try       
-      Lwt_bytes.read sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf)
-    with 
-    | e -> 
-      Printexc.print_backtrace stdout ;
-      let%lwt _ = Logs_lwt.warn (fun m -> m "Read failed on socket with %s" (Printexc.to_string e)) in
-      Lwt.fail e
-    )
-    >>= fun n ->       
-      let alen' = alen + n in 
-      let%lwt _ = Logs_lwt.debug (fun m -> m "Net.read_all: Read %d out of %d bytes" alen' tlen) in
-      if alen' = tlen then Lwt.return tlen 
-      else 
-        begin
-          let b = IOBuf.set_position_unsafe (opos + alen') buf  in
-          do_read alen' b
-        end
-  in 
-    do_read 0 buf
+    let rec r_read_all_r tlen sock buf offset len  =
+      let%lwt _ = Logs_lwt.debug (fun m -> m "r_read_all off: %d len: %d" offset len) in
+      let%lwt n = Lwt_bytes.read sock buf offset len in   
+      if n < len then r_read_all_r tlen sock buf (offset + n) (len - n) 
+      else Lwt.return tlen 
+    in
+      let pos = IOBuf.position buf in 
+      let len = (IOBuf.limit buf) - pos in 
+      r_read_all_r len sock (IOBuf.to_bytes buf) pos len
+
+  
 
 (* let read sock buf = Lwt_bytes.read sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf) *)
 let read = read_all
@@ -59,11 +47,11 @@ let send_vec sock bs =
   let iovec = List.map (fun buf -> IOBuf.to_io_vector buf) bs in
   (Lwt_bytes.send_msg ~socket:sock ~io_vectors:iovec ~fds:[])
 
-let safe_close _ =
+let safe_close fd =
   Lwt.catch
     (fun () -> 
-      let%lwt _ = Logs_lwt.debug (fun m -> m "Closing socket...") in Lwt.return_unit
-      (* Lwt_unix.close fd) *))
+      let%lwt _ = Logs_lwt.debug (fun m -> m "Closing socket...") in 
+      Lwt_unix.close fd)
     (fun _ -> Lwt.return_unit)
 
 let read_vle sock buf = 
