@@ -6,11 +6,11 @@ let read_all sock buf =
   let opos = IOBuf.position buf in 
   let tlen = (IOBuf.limit buf) - opos in   
   let rec do_read alen buf =     
-    (try 
-      let%lwt _ = Logs_lwt.debug (fun m -> m "Buffer: %s" (IOBuf.to_string buf)) in 
+    (try       
       Lwt_bytes.read sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf)
     with 
     | e -> 
+      Printexc.print_backtrace stdout ;
       let%lwt _ = Logs_lwt.warn (fun m -> m "Read failed on socket with %s" (Printexc.to_string e)) in
       Lwt.fail e
     )
@@ -59,9 +59,11 @@ let send_vec sock bs =
   let iovec = List.map (fun buf -> IOBuf.to_io_vector buf) bs in
   (Lwt_bytes.send_msg ~socket:sock ~io_vectors:iovec ~fds:[])
 
-let safe_close fd =
+let safe_close _ =
   Lwt.catch
-    (fun () -> Lwt_unix.close fd)
+    (fun () -> 
+      let%lwt _ = Logs_lwt.debug (fun m -> m "Closing socket...") in Lwt.return_unit
+      (* Lwt_unix.close fd) *))
     (fun _ -> Lwt.return_unit)
 
 let read_vle sock buf = 
@@ -78,7 +80,7 @@ let read_vle sock buf =
                   match Vle.of_char b with
                   | c when c <= 0x7fL -> Lwt.return (Vle.logor v (Vle.shift_left c (bc * 7)))
                   | c  -> 
-                    let x : Vle.t = Vle.shift_left (Vle.logand c  0x7fL)  bc in 
+                    let x : Vle.t = Vle.shift_left (Vle.logand c  0x7fL)  (bc * 7) in 
                     extract_length  (Vle.logor v x) (bc + 1) buf)
               ~fail_with:(fun e -> Lwt.fail @@ Exception e))            
       ~fail_with:(fun e -> Lwt.fail @@ Exception e)        
