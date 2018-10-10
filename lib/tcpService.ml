@@ -115,9 +115,8 @@ module TcpService = struct
       in 
         Lwt.catch (fun () -> loop ()) 
         (fun exn -> 
-          unregister_connection svc sid 
-            >>= fun _ -> 
-              Logs_lwt.warn (fun m -> m "Closing session %s because of: %s " (Id.to_string sid) (Printexc.to_string exn)))  
+          let _ = Logs_lwt.warn (fun m -> m "Closing session %s because of: %s\n%s" (Id.to_string sid) (Printexc.to_string exn) (Printexc.get_backtrace())) in
+          unregister_connection svc sid)
 
     let create config  = 
       let socket = create_server_socket config in 
