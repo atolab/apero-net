@@ -17,6 +17,17 @@ let read_all sock buf =
 (* let read sock buf = Lwt_bytes.read sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf) *)
 let read = read_all
 
+let write_all sock buf = 
+    let rec r_write_all_r tlen sock buf offset len  =
+      let%lwt _ = Logs_lwt.debug (fun m -> m "r_write_all off: %d len: %d" offset len) in
+      let%lwt n = Lwt_bytes.write sock buf offset len in   
+      if n < len then r_write_all_r tlen sock buf (offset + n) (len - n) 
+      else Lwt.return tlen 
+    in
+      let pos = IOBuf.position buf in 
+      let len = (IOBuf.limit buf) - pos in 
+      r_write_all_r len sock (IOBuf.to_bytes buf) pos len
+
 let write sock buf = Lwt_bytes.write sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf)
 
 let recv ?(flags=[]) sock buf =

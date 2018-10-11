@@ -11,9 +11,12 @@ val read_all : Lwt_unix.file_descr -> IOBuf.t -> int Lwt.t
 (** [read] (limit -pos) bytes out of the file descriptior in to
     the IOBuf. Returns the  actual number of bytes read. *)
 
-
 val write : Lwt_unix.file_descr -> IOBuf.t -> int Lwt.t
-(** [write]  the bytes between {e pos} and {e limit}. Returns the number
+(** [write] at most the bytes between {e pos} and {e limit}. Returns the number
+    of bytes actually written. *)
+
+val write_all : Lwt_unix.file_descr -> IOBuf.t -> int Lwt.t
+(** [write] the bytes between {e pos} and {e limit}. Returns the number
     of bytes actually written. *)
 
 val recv : ?flags:Unix.msg_flag list -> Lwt_unix.file_descr -> IOBuf.t -> int Lwt.t
