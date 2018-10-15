@@ -40,3 +40,5 @@ val safe_close : Lwt_unix.file_descr -> unit Lwt.t
 val read_vle : Lwt_unix.file_descr -> IOBuf.t -> Vle.t Lwt.t 
 
 val write_vle : Lwt_unix.file_descr -> IOBuf.t -> Vle.t -> int Lwt.t 
+
+val connect : Lwt_unix.file_descr -> Locator.Locator.t -> Lwt_unix.file_descr Lwt.t

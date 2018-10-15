@@ -89,3 +89,11 @@ let read_vle sock buf =
     match encode_vle vle buf with 
     | Ok buf -> send sock buf
     | Error e -> Lwt.fail (Apero.Exception e)
+
+let connect socket locator = 
+  let saddr = match locator with 
+    | Locator.Locator.UdpLocator ul -> 
+      Endpoint.IpEndpoint.to_sockaddr @@ Iplocator.UdpLocator.endpoint ul   
+    | Locator.Locator.TcpLocator tl -> 
+      Endpoint.IpEndpoint.to_sockaddr @@ Iplocator.TcpLocator.endpoint tl
+  in Lwt_unix.connect socket saddr >>= fun () -> Lwt.return socket
