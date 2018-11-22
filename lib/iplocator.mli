@@ -18,3 +18,4 @@ end
 
 module UdpLocator : IpLocator.S
 module TcpLocator : IpLocator.S
+module WebSockLocator : IpLocator.S

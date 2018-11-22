@@ -39,3 +39,4 @@ end
 
 module UdpLocator = IpLocator.Make(struct let protocol = "udp" end)
 module TcpLocator = IpLocator.Make(struct let protocol = "tcp" end)
+module WebSockLocator = IpLocator.Make(struct let protocol = "ws" end)

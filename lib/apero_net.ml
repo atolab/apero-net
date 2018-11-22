@@ -7,4 +7,4 @@ include NetService
 include TcpService
 include TcpServiceES
 include NetServiceTcp
-
+include NetServiceWebSock
