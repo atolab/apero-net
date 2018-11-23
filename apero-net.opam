@@ -24,6 +24,8 @@ depends: [
   "yojson"
   "lwt_ppx"
   "apero-core" {>= "0.3.0"}
+  "websocket" {>= "2.12"}
+  "websocket-lwt" {>= "2.12"}
 ]
 
 synopsis : "OCaml Networking Library"

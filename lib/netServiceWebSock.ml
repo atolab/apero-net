@@ -1,9 +1,7 @@
 open Apero
 open Iplocator 
 open Endpoint
-(* open Lwt.Infix *)
-(* open Websocket *)
-open Websocket_lwt
+
 
 module NetServiceWebSock = struct
   
@@ -75,7 +73,7 @@ module NetServiceWebSock = struct
                 handle_session rbuf wbuf client handler)
                       (fun ex -> Lwt.return @@ on_exception ex)
         in            
-        establish_standard_server ~ctx:ctx ~stop:svc.waiter ~on_exn:on_exception ~mode:(server_endp svc.config) safe_handler
+        Websocket_lwt.establish_standard_server ~ctx:ctx ~stop:svc.waiter ~on_exn:on_exception ~mode:(server_endp svc.config) safe_handler
     
     let stop svc = Lwt.return @@ Lwt.wakeup svc.notifier ()          
 
