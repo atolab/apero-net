@@ -5,7 +5,7 @@ open Lwt.Infix
 
 module TcpService = struct
     
-  module Id = Id.Make (Int64)
+  module Id = NumId.Make (Int64)
 
   module Config = struct 
     open Lwt_unix
@@ -109,7 +109,7 @@ module TcpService = struct
       Lwt.join @@ ConnectionMap.fold (fun _ sock xs -> (Net.safe_close sock)::xs) connections []
           
     let serve_connection (sock:Lwt_unix.file_descr) (svc:t) (sid: Id.t) (io_svc: io_service) =       
-      let%lwt _ = Logs_lwt.debug (fun m -> m "Serving session with Id: %s" (Id.show sid)) in 
+      let%lwt _ = Logs_lwt.debug (fun m -> m "Serving session with Id: %s" (Id.to_string sid)) in 
       let mio_svc = io_svc sock in     
       let rec loop () = mio_svc () >>= loop        
       in 

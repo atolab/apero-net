@@ -98,7 +98,7 @@ module NetServiceTcp = struct
       Lwt.join @@ ConnectionMap.fold (fun _ sock xs -> (Net.safe_close sock)::xs) connections []
 
     let make_connection_context (sock:Lwt_unix.file_descr) (svc:t) (sid: Id.t) (io_svc: io_service) =       
-      let%lwt _ = Logs_lwt.debug (fun m -> m "Serving session with Id: %s" (Id.show sid)) in 
+      let%lwt _ = Logs_lwt.debug (fun m -> m "Serving session with Id: %s" (Id.to_string sid)) in 
       let (wait_close, notifier)  = Lwt.wait () in 
       let (wait_remote_close, notify_remote_close)  = Lwt.wait () in 
       let s : svc_state = `CloseSession in 

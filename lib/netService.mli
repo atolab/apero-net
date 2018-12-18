@@ -4,7 +4,7 @@ open Common *)
 
 type mtu = Unlimited | Limited of int
 
-module Id : Id.S
+module Id : Apero.NumId.S
 
 module TxSession : sig                 
   type t     

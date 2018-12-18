@@ -6,7 +6,7 @@ open Endpoint
 
 module TcpServiceES = struct
     
-  module Id = Id.Make (Int64)
+  module Id = NumId.Make (Int64)
 
   module Config = struct 
     open Lwt_unix
@@ -142,7 +142,7 @@ module TcpServiceES = struct
       Lwt.join @@ ConnectionMap.fold (fun _ sock xs -> (Net.safe_close sock)::xs) connections []
       
     let serve_connection (sock:Lwt_unix.file_descr) (svc:t) (sid: Id.t) =       
-      let%lwt _ = Logs_lwt.debug (fun m -> m "Serving session with Id: %s" (Id.show sid)) in 
+      let%lwt _ = Logs_lwt.debug (fun m -> m "Serving session with Id: %s" (Id.to_string sid)) in 
       let mreader = svc.mreader sock in 
       let mwriter = svc.mwriter sock in 
       let sink = svc.out_sink in

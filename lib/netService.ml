@@ -4,7 +4,7 @@ open Common *)
 
 type mtu = Unlimited | Limited of int
 
-module Id = Id.Make (Int64)
+module Id = Apero.NumId.Make (Int64)
 
 module TxSession = struct
   type t = 
