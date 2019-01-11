@@ -1,5 +1,5 @@
 opam-version: "2.0"
-version:"0.3.0"
+version:"0.4.0"
 maintainer:   ["angelo@adlink-labs.tech"]
 authors:      ["Angelo Corsaro"]
 homepage:     "https://github.com/atolab"
