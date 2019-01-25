@@ -1,7 +1,7 @@
 opam-version: "2.0"
-version:"0.4.0"
-maintainer:   ["angelo@adlink-labs.tech"]
-authors:      ["Angelo Corsaro"]
+version:"0.4.1"
+maintainer:   ["contact@adlink-labs.tech"]
+authors:      ["Angelo Corsaro" "Julien Enoch" "Oliver Hecart" "Gabriele Baldoni"]
 homepage:     "https://github.com/atolab"
 bug-reports:  "https://github.com/atolab/apero-net/issues/"
 dev-repo:     "git://github.com/atolab/apero-net.git"
@@ -23,7 +23,7 @@ depends: [
   "uuidm" 
   "yojson"
   "lwt_ppx"
-  "apero-core" {>= "0.3.0"}
+  "apero-core" {>= "0.4.1"}
   "websocket" {>= "2.12"}
   "websocket-lwt" {>= "2.12"}
 ]
