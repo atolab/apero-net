@@ -1,6 +1,7 @@
 open Apero
 open Lwt
 
+
 let read_all sock buf = 
     let rec r_read_all_r tlen sock buf offset len  =
       let%lwt _ = Logs_lwt.debug (fun m -> m "r_read_all off: %d len: %d" offset len) in
@@ -57,6 +58,55 @@ let recv_vec sock bs =
 let send_vec sock bs =
   let iovec = List.map (fun buf -> IOBuf.to_io_vector buf) bs in
   (Lwt_bytes.send_msg ~socket:sock ~io_vectors:iovec ~fds:[])
+
+type net_send_vec_ctx = {total_bytes: int; mutable sent_bytes: int; mutable bs: IOBuf.t list; mutable idx: int}
+let send_vec_all sock bs = 
+  
+  let rec recompute_iovec ctx bs = 
+    match bs with 
+    | h::tl ->
+      let blen = (IOBuf.limit h) in 
+      if ctx.sent_bytes >= blen + ctx.idx then  
+        begin
+          ctx.idx <- ctx.idx + blen;
+          recompute_iovec ctx tl
+        end 
+      else 
+        let pos = ctx.sent_bytes - ctx.idx in 
+        let b = IOBuf.set_position_unsafe pos h in 
+        let rs = b::tl  in         
+        rs
+    | [] -> []
+  in  
+  
+  let rec send_more ctx = 
+    if ctx.sent_bytes < ctx.total_bytes then 
+      begin 
+        let bs = recompute_iovec ctx ctx.bs in 
+        ctx.bs <- bs ; 
+        let iovec = List.map (fun buf -> IOBuf.to_io_vector buf) bs in
+        let%lwt sent_bytes = Lwt_bytes.send_msg ~socket:sock ~io_vectors:iovec ~fds:[] in 
+        ctx.sent_bytes <- ctx.sent_bytes + sent_bytes ;
+        send_more ctx
+      end
+    else 
+      begin
+        Lwt.return ctx.sent_bytes 
+      end 
+
+  in 
+  
+  let total_bytes = List.fold_left (fun a b -> a + IOBuf.limit b) 0 bs in
+  let iovec = List.map (fun buf -> IOBuf.to_io_vector buf) bs in
+  let%lwt sent_bytes = Lwt_bytes.send_msg ~socket:sock ~io_vectors:iovec ~fds:[] in 
+  if sent_bytes < total_bytes then 
+    begin
+      let ctx = {total_bytes; sent_bytes; idx = 0; bs} in 
+      send_more ctx
+    end
+  else 
+    Lwt.return sent_bytes
+
 
 let safe_close fd =
   Lwt.catch

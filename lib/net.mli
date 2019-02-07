@@ -35,6 +35,8 @@ val recv_vec : Lwt_unix.file_descr -> IOBuf.t list -> (int * Unix.file_descr lis
 
 val send_vec : Lwt_unix.file_descr -> IOBuf.t list -> int Lwt.t
 
+val send_vec_all : Lwt_unix.file_descr -> IOBuf.t list -> int Lwt.t
+
 val safe_close : Lwt_unix.file_descr -> unit Lwt.t
 
 val read_vle : Lwt_unix.file_descr -> IOBuf.t -> Vle.t Lwt.t 
