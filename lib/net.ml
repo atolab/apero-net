@@ -65,15 +65,16 @@ let send_vec_all sock bs =
   let rec recompute_iovec ctx bs = 
     match bs with 
     | h::tl ->
-      let blen = (IOBuf.limit h) in 
+      let blen = IOBuf.limit h - IOBuf.position h in 
       if ctx.sent_bytes >= blen + ctx.idx then  
         begin
           ctx.idx <- ctx.idx + blen;
           recompute_iovec ctx tl
         end 
       else 
-        let pos = ctx.sent_bytes - ctx.idx in 
-        let b = IOBuf.set_position_unsafe pos h in 
+        let delta = ctx.sent_bytes - ctx.idx in 
+        let offset = IOBuf.position h in 
+        let b = IOBuf.set_position_unsafe (offset + delta) h in 
         let rs = b::tl  in         
         rs
     | [] -> []
@@ -96,7 +97,7 @@ let send_vec_all sock bs =
 
   in 
   
-  let total_bytes = List.fold_left (fun a b -> a + IOBuf.limit b) 0 bs in
+  let total_bytes = List.fold_left (fun a b -> a + (IOBuf.limit b - IOBuf.position b)) 0 bs in
   let iovec = List.map (fun buf -> IOBuf.to_io_vector buf) bs in
   let%lwt sent_bytes = Lwt_bytes.send_msg ~socket:sock ~io_vectors:iovec ~fds:[] in 
   if sent_bytes < total_bytes then 
