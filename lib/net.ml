@@ -15,15 +15,15 @@ let rec to_io_vecs bufs offset =
 
 
 let read_all sock buf = 
-    let rec r_read_all_r tlen sock buf offset len  =
+    let rec r_read_all_r sock buf offset len read =
       let%lwt _ = Logs_lwt.debug (fun m -> m "r_read_all off: %d len: %d" offset len) in
       let%lwt n = Lwt_bytes.read sock buf offset len in   
-      if n < len then r_read_all_r tlen sock buf (offset + n) (len - n) 
-      else Lwt.return tlen 
+      if n <> 0 && n < len then r_read_all_r sock buf (offset + n) (len - n) (read + n)
+      else Lwt.return (read + n)
     in
       let pos = IOBuf.position buf in 
       let len = (IOBuf.limit buf) - pos in 
-      r_read_all_r len sock (IOBuf.to_bytes buf) pos len
+      r_read_all_r sock (IOBuf.to_bytes buf) pos len 0
 
   
 
