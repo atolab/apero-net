@@ -111,7 +111,7 @@ module NetServiceTcp = struct
 
         let rec loop () = 
           let r : svc_state = `Run in
-          let continue = mio_svc () >>= fun () -> Lwt.return r in 
+          let continue = mio_svc () >>= Lwt.pause >>= fun () -> Lwt.return r in 
           Lwt.choose [continue; wait_close] >>= function 
           | `Run -> loop ()
           | _ ->  
