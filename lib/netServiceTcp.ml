@@ -115,16 +115,16 @@ module NetServiceTcp = struct
           Lwt.choose [continue; wait_close] >>= function 
           | `Run -> loop ()
           | _ ->  
-            unregister_connection svc sid 
-            >>= fun _ -> Logs_lwt.info (fun m -> m "Closing session %s " (Id.to_string sid))          
-          
+            Logs_lwt.info (fun m -> m "Closing session %s " (Id.to_string sid)) 
+            >>= fun _ -> unregister_connection svc sid 
+            >>= fun _ -> Lwt.return_unit
         in 
         Lwt.catch (fun () -> loop ()) 
-          (fun _ -> 
-            Lwt.wakeup_later notify_remote_close true;
-            unregister_connection svc sid 
-            >>= fun _ -> 
-            Logs_lwt.warn (fun m -> m "Closing session %s because of peer disconnection" (Id.to_string sid)))  
+          (fun e -> 
+            Logs_lwt.warn (fun m -> m "Closing session %s because of %s" (Id.to_string sid) (Printexc.to_string e))
+            >>= fun _ -> Lwt.wakeup_later notify_remote_close true;
+                         unregister_connection svc sid
+            >>= fun _ -> Lwt.return_unit)
       in Lwt.return (sctx, serve)
 
     let serve_connection (sock:Lwt_unix.file_descr) (svc:t) (sid: Id.t) (io_svc: io_service) =   
