@@ -1,10 +1,10 @@
 opam-version: "2.0"
-version:"0.4.1"
+version:"0.4.2"
 maintainer:   ["contact@adlink-labs.tech"]
 authors:      ["Angelo Corsaro" "Julien Enoch" "Oliver Hecart" "Gabriele Baldoni"]
 homepage:     "https://github.com/atolab"
 bug-reports:  "https://github.com/atolab/apero-net/issues/"
-dev-repo:     "git://github.com/atolab/apero-net.git"
+dev-repo:     "git+https://github.com/atolab/apero-net.git"
 
 license: "Apache-2.0"
 
@@ -14,6 +14,7 @@ build: [
 
 
 depends: [
+  "ocaml" {>= "4.03.0"}
   "dune"
   "cmdliner"
   "fmt" 
@@ -23,7 +24,7 @@ depends: [
   "uuidm" 
   "yojson"
   "lwt_ppx"
-  "apero-core" {>= "0.4.1"}
+  "apero-core" {>= "0.4.2"}
   "websocket" {>= "2.12"}
   "websocket-lwt" {>= "2.12"}
 ]
