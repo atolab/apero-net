@@ -88,7 +88,7 @@ module NetServiceTcp = struct
         let%lwt _ = MVar.put svc.connections_count (Int64.sub connection_count Int64.one) in
         let%lwt _ = Net.safe_close sock in
         Lwt.return @@ Result.ok ()
-      | None -> Lwt.return @@ Result.fail  @@ `InvalidSession  (`Msg "Unknown session id")
+      | None -> Lwt.return @@ Result.fail  @@ `InvalidSession  (`Msg "Unknown tx-session id")
 
     let close_sessions svc =       
       let%lwt _ = MVar.take svc.connections_count in 
@@ -98,7 +98,7 @@ module NetServiceTcp = struct
       Lwt.join @@ ConnectionMap.fold (fun _ sock xs -> (Net.safe_close sock)::xs) connections []
 
     let make_connection_context (sock:Lwt_unix.file_descr) (svc:t) (sid: Id.t) (io_svc: io_service) =       
-      let%lwt _ = Logs_lwt.debug (fun m -> m "Serving session with Id: %s" (Id.to_string sid)) in 
+      let%lwt _ = Logs_lwt.info (fun m -> m "Serving tx-session with Id: %s" (Id.to_string sid)) in 
       let (wait_close, notifier)  = Lwt.wait () in 
       let (wait_remote_close, notify_remote_close)  = Lwt.wait () in 
       let s : svc_state = `CloseSession in 
@@ -115,13 +115,13 @@ module NetServiceTcp = struct
           Lwt.choose [continue; wait_close] >>= function 
           | `Run -> loop ()
           | _ ->  
-            Logs_lwt.info (fun m -> m "Closing session %s " (Id.to_string sid)) 
+            Logs_lwt.info (fun m -> m "Closing tx-session %s " (Id.to_string sid)) 
             >>= fun _ -> unregister_connection svc sid 
             >>= fun _ -> Lwt.return_unit
         in 
         Lwt.catch (fun () -> loop ()) 
           (fun e -> 
-            Logs_lwt.warn (fun m -> m "Closing session %s because of %s" (Id.to_string sid) (Printexc.to_string e))
+            Logs_lwt.warn (fun m -> m "Closing tx-session %s because of %s" (Id.to_string sid) (Printexc.to_string e))
             >>= fun _ -> Lwt.wakeup_later notify_remote_close true;
                          unregister_connection svc sid
             >>= fun _ -> Lwt.return_unit)
@@ -148,7 +148,7 @@ module NetServiceTcp = struct
 
     let start (svc : t) io_svc =       
       let%lwt _ = 
-        Logs_lwt.debug (fun m -> m "Starting TcpService at %s with svc-id %d " 
+        Logs_lwt.info (fun m -> m "Starting TcpService at %s with svc-id %d " 
                            (TcpLocator.to_string @@ Config.locator svc.config) 
                            (Config.svc_id svc.config)) in 
 
@@ -176,15 +176,15 @@ module NetServiceTcp = struct
                  in accept_connection svc)
             | `Stop ->  
 
-              let%lwt _ = Logs_lwt.debug (fun m -> m "Stopping svc...") in                                                
+              let%lwt _ = Logs_lwt.info (fun m -> m "Stopping svc...") in
               let%lwt _ = Net.safe_close svc.socket in               
-              let%lwt _ = Logs_lwt.debug (fun m -> m "Closing Session...") in
+              let%lwt _ = Logs_lwt.debug (fun m -> m "Closing tx-sessions...") in
               let _ = close_sessions svc in Lwt.return_unit)
                 
           (function 
             | Lwt.Canceled -> Lwt.return_unit            
             | exn ->               
-              Logs_lwt.debug (fun m  -> m "Exception raised while accepting session:\n\t%s" (Printexc.to_string exn)))
+              Logs_lwt.debug (fun m  -> m "Error while accepting tx-session: %s" (Printexc.to_string exn)))
       in accept_connection svc 
 
     let stop svc = Lwt.return @@ Lwt.wakeup svc.notifier ()      
