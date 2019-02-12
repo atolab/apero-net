@@ -167,7 +167,7 @@ module NetServiceTcp = struct
             | `Accept (sock, _) ->              
               (match%lwt register_connection svc sock with 
                | Ok sid -> 
-                 let _ = Lwt_preemptive.detach (serve_connection sock svc sid) io_svc                
+                 let _ = serve_connection sock svc sid io_svc                
                  in accept_connection svc                    
                | Error e ->                   
                  let%lwt _ = Logs_lwt.warn (fun m -> m "%s" @@ show_error e) 
