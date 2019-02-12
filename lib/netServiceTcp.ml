@@ -97,6 +97,8 @@ module NetServiceTcp = struct
       let%lwt _ = MVar.put svc.connections ConnectionMap.empty in 
       Lwt.join @@ ConnectionMap.fold (fun _ sock xs -> (Net.safe_close sock)::xs) connections []
 
+    let yield_period = 42
+
     let make_connection_context (sock:Lwt_unix.file_descr) (svc:t) (sid: Id.t) (io_svc: io_service) =       
       let%lwt _ = Logs_lwt.info (fun m -> m "Serving tx-session with Id: %s" (Id.to_string sid)) in 
       let (wait_close, notifier)  = Lwt.wait () in 
@@ -109,17 +111,17 @@ module NetServiceTcp = struct
       let serve = fun () ->
         let mio_svc = io_svc sctx in     
 
-        let rec loop () = 
+        let rec loop c = 
           let r : svc_state = `Run in
-          let continue = mio_svc () >>= Lwt.pause >>= fun () -> Lwt.return r in 
+          let continue = mio_svc ()  >>= fun () -> (if c = 0 then Lwt.pause () else Lwt.return_unit) >>= fun () -> Lwt.return r in 
           Lwt.choose [continue; wait_close] >>= function 
-          | `Run -> loop ()
+          | `Run -> loop ((c + 1) mod yield_period)
           | _ ->  
             Logs_lwt.info (fun m -> m "Closing tx-session %s " (Id.to_string sid)) 
             >>= fun _ -> unregister_connection svc sid 
             >>= fun _ -> Lwt.return_unit
         in 
-        Lwt.catch (fun () -> loop ()) 
+        Lwt.catch (fun () -> loop 1) 
           (fun e -> 
             Logs_lwt.warn (fun m -> m "Closing tx-session %s because of %s" (Id.to_string sid) (Printexc.to_string e))
             >>= fun _ -> Lwt.wakeup_later notify_remote_close true;
