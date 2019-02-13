@@ -3,8 +3,8 @@ open Cmdliner
 open NetService
 
 (* Make the service with the TcpService functor *)
-module EchoService = NetServiceTcp.Make  (Apero.MVar_lwt)
-module Config = NetServiceTcp.TcpConfig
+module EchoService = NetServiceTcp
+module Config = EchoService.TcpConfig
 
 (* The first step is to define the message that will be used to communicate 
    between TcpService and the service implementation *)

@@ -1,7 +1,7 @@
-open Apero
 open Iplocator 
 open Endpoint
 open Lwt.Infix
+open Apero
 
 module NetServiceTcp = struct
   
@@ -38,13 +38,13 @@ module NetServiceTcp = struct
     let buf_size c = c.buf_size
   end
 
-  module type S = NetService.S     
+  (* module type S = NetService.S      *)
 
-  module Make (MVar : MVar)  = struct     
     module Config = TcpConfig
     open NetService 
     type io_service = TxSession.t -> unit -> unit Lwt.t
     type svc_state = [`Run | `CloseSession | `StopService]
+    type config = Config.t
 
     module ConnectionMap = Map.Make(Id)
 
@@ -53,10 +53,10 @@ module NetServiceTcp = struct
     ; waiter : unit Lwt.t
     ; notifier : unit Lwt.u      
     ; max_connections : Int64.t 
-    ; connections_count : Int64.t MVar.t
-    ; connections : (Lwt_unix.file_descr ConnectionMap.t) MVar.t
+    ; mutable connections_count : Int64.t 
+    ; mutable connections : (Lwt_unix.file_descr ConnectionMap.t) 
     ; config : Config.t
-    ; io_svc : io_service MVar.t }
+    ; mutable io_svc : io_service }
 
     let mtu = Unlimited
 
@@ -70,31 +70,28 @@ module NetServiceTcp = struct
 
 
     let register_connection svc sock = 
-      match%lwt  MVar.take svc.connections_count with 
+      match svc.connections_count with 
       | count when count < svc.max_connections ->
         let sid = Id.next_id () in 
-        let%lwt connections = MVar.take svc.connections in
-        let%lwt _ = MVar.put svc.connections (ConnectionMap.add sid sock connections) in 
-        let%lwt _= MVar.put svc.connections_count (Int64.add count Int64.one) in
+        let connections = svc.connections in
+        svc.connections <- (ConnectionMap.add sid sock connections) ;
+        svc.connections_count <- (Int64.add count Int64.one) ;
         Lwt.return @@  Result.ok sid 
       | _ -> Lwt.return @@ Result.fail (`ResourceLimitViolation (`Msg "Too many connections"))
 
-    let unregister_connection svc sid =       
-      let%lwt connection_count = MVar.take svc.connections_count in 
-      let%lwt connections = MVar.take svc.connections in 
-      match ConnectionMap.find_opt sid connections with
+    let unregister_connection svc sid =             
+      match ConnectionMap.find_opt sid svc.connections with
       | Some sock ->               
-        let%lwt _ = MVar.put svc.connections (ConnectionMap.remove sid connections) in 
-        let%lwt _ = MVar.put svc.connections_count (Int64.sub connection_count Int64.one) in
+        svc.connections <- (ConnectionMap.remove sid svc.connections);
+        svc.connections_count <- (Int64.sub svc.connections_count Int64.one);        
         let%lwt _ = Net.safe_close sock in
         Lwt.return @@ Result.ok ()
       | None -> Lwt.return @@ Result.fail  @@ `InvalidSession  (`Msg "Unknown tx-session id")
 
-    let close_sessions svc =       
-      let%lwt _ = MVar.take svc.connections_count in 
-      let%lwt _ = MVar.put svc.connections_count 0L in 
-      let%lwt connections = MVar.take svc.connections in 
-      let%lwt _ = MVar.put svc.connections ConnectionMap.empty in 
+    let close_sessions svc =              
+      svc.connections_count <- 0L; 
+      let connections =svc.connections in 
+      svc.connections <- ConnectionMap.empty;
       Lwt.join @@ ConnectionMap.fold (fun _ sock xs -> (Net.safe_close sock)::xs) connections []
 
     let make_connection_context (sock:Lwt_unix.file_descr) (svc:t) (sid: Id.t) (io_svc: io_service) =       
@@ -139,10 +136,10 @@ module NetServiceTcp = struct
       ; waiter
       ; notifier
       ; max_connections = Int64.of_int (Config.max_connectiosn config)
-      ; connections_count = MVar.create Int64.zero
-      ; connections = MVar.create (ConnectionMap.empty) 
+      ; connections_count =  Int64.zero
+      ; connections = (ConnectionMap.empty) 
       ; config 
-      ; io_svc = MVar.create_empty ()} 
+      ; io_svc = fun _ _ -> Lwt.return_unit} 
 
 
 
@@ -152,7 +149,7 @@ module NetServiceTcp = struct
                            (TcpLocator.to_string @@ Config.locator svc.config) 
                            (Config.svc_id svc.config)) in 
 
-      let%lwt _ = MVar.put svc.io_svc io_svc in 
+      svc.io_svc <- io_svc;
       let stop = svc.waiter >|= fun () -> `Stop in 
 
       let rec accept_connection svc =         
@@ -200,9 +197,8 @@ module NetServiceTcp = struct
       let saddr = IpEndpoint.to_sockaddr @@ TcpLocator.endpoint tcp_locator in   
       let psid = connect sock saddr >>= fun () -> register_connection svc sock in 
       match%lwt psid with 
-      | Ok sid -> 
-        let%lwt io_svc = MVar.read svc.io_svc in 
-        let%lwt (txs, serve) = make_connection_context sock svc sid io_svc in 
+      | Ok sid ->         
+        let%lwt (txs, serve) = make_connection_context sock svc sid svc.io_svc in 
         let _ = serve () in Lwt.return txs          
       
       | Error e -> Lwt.fail @@ Exception e
@@ -212,6 +208,4 @@ module NetServiceTcp = struct
       | Locator.Locator.TcpLocator tcplocator -> establish_tcp_session svc tcplocator      
       |_ ->  Lwt.fail_with "Invalid Locator"
     
-  end
-
 end

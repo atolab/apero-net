@@ -1,5 +1,4 @@
 open Iplocator 
-open Apero
 
 
 module NetServiceTcp : sig 
@@ -24,8 +23,8 @@ module NetServiceTcp : sig
     val svc_id : t -> int
     val buf_size : t -> int
   end
-  module type S = NetService.S     
+  
+  include NetService.S with type config = TcpConfig.t
     
-  module Make (MVar : MVar) : S with type config := TcpConfig.t
 
 end
