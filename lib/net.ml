@@ -6,12 +6,12 @@ let rec to_io_vecs bufs offset =
    match bufs with 
    | [] -> []
    | hd :: tl -> 
-     if IOBuf.available hd >= offset
+     if MIOBuf.available hd >= offset
      then 
-       Lwt_bytes.{ iov_buffer = IOBuf.to_bytes hd; iov_offset = IOBuf.position hd + offset; iov_length = IOBuf.available hd - offset; }
+       Lwt_bytes.{ iov_buffer = MIOBuf.to_bytes hd; iov_offset = MIOBuf.position hd + offset; iov_length = MIOBuf.available hd - offset; }
        :: to_io_vecs tl 0
      else 
-       to_io_vecs tl (offset - IOBuf.available hd)
+       to_io_vecs tl (offset - MIOBuf.available hd)
 
 
 let read_all sock buf = 
@@ -21,13 +21,13 @@ let read_all sock buf =
       if n <> 0 && n < len then r_read_all_r sock buf (offset + n) (len - n) (read + n)
       else Lwt.return (read + n)
     in
-      let pos = IOBuf.position buf in 
-      let len = (IOBuf.limit buf) - pos in 
-      r_read_all_r sock (IOBuf.to_bytes buf) pos len 0
+      let pos = MIOBuf.position buf in 
+      let len = (MIOBuf.limit buf) - pos in 
+      r_read_all_r sock (MIOBuf.to_bytes buf) pos len 0
 
   
 
-(* let read sock buf = Lwt_bytes.read sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf) *)
+(* let read sock buf = Lwt_bytes.read sock (MIOBuf.to_bytes buf) (MIOBuf.position buf) (MIOBuf.limit buf) *)
 let read = read_all
 
 let write_all sock buf = 
@@ -37,28 +37,28 @@ let write_all sock buf =
       if n < len then r_write_all_r tlen sock buf (offset + n) (len - n) 
       else Lwt.return tlen 
     in
-      let pos = IOBuf.position buf in 
-      let len = (IOBuf.limit buf) - pos in 
-      r_write_all_r len sock (IOBuf.to_bytes buf) pos len
+      let pos = MIOBuf.position buf in 
+      let len = (MIOBuf.limit buf) - pos in 
+      r_write_all_r len sock (MIOBuf.to_bytes buf) pos len
 
-let write sock buf = Lwt_bytes.write sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf)
+let write sock buf = Lwt_bytes.write sock (MIOBuf.to_bytes buf) (MIOBuf.position buf) (MIOBuf.limit buf)
 
 let recv ?(flags=[]) sock buf =
-  match%lwt Lwt_bytes.recv sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf) flags with
+  match%lwt Lwt_bytes.recv sock (MIOBuf.to_bytes buf) (MIOBuf.position buf) (MIOBuf.limit buf) flags with
   | 0 -> fail @@ Exception (`ClosedSession `NoMsg)
   | n -> return n
 
 
 let send ?(flags=[]) sock buf = 
-  Lwt_bytes.send sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf) flags
+  Lwt_bytes.send sock (MIOBuf.to_bytes buf) (MIOBuf.position buf) (MIOBuf.limit buf) flags
 
 let recvfrom ?(flags=[]) sock buf =
-  match%lwt Lwt_bytes.recvfrom sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf) flags with
+  match%lwt Lwt_bytes.recvfrom sock (MIOBuf.to_bytes buf) (MIOBuf.position buf) (MIOBuf.limit buf) flags with
   | (0, _) -> fail @@ Exception (`ClosedSession `NoMsg)
   | _ as r -> return r
 
 let sendto ?(flags=[]) sock buf addr = 
-  Lwt_bytes.sendto sock (IOBuf.to_bytes buf) (IOBuf.position buf) (IOBuf.limit buf) flags addr
+  Lwt_bytes.sendto sock (MIOBuf.to_bytes buf) (MIOBuf.position buf) (MIOBuf.limit buf) flags addr
 
 
 let recv_vec sock bs =
@@ -73,7 +73,7 @@ let send_vec sock bs =
 
 let send_vec_all sock bs = 
   let rec send_vec_all_from sock bs offset = 
-    let total_bytes = (List.fold_left (fun a b -> a + (IOBuf.available b)) 0 bs) - offset in
+    let total_bytes = (List.fold_left (fun a b -> a + (MIOBuf.available b)) 0 bs) - offset in
     let iovec = to_io_vecs bs offset in
     let%lwt sent_bytes = Lwt_bytes.send_msg ~socket:sock ~io_vectors:iovec ~fds:[] in 
     if sent_bytes < total_bytes 
@@ -93,29 +93,28 @@ let safe_close fd =
     (fun _ -> Lwt.return_unit)
 
 let read_vle sock buf = 
-  let rec extract_length (v:Vle.t) (bc:int) (buf: IOBuf.t) =       
-    Result.try_get 
-      ~on:(IOBuf.reset_with 0 1 buf)
-      ~run:(fun buf ->
-          match%lwt recv sock buf with
-          | 0 -> Lwt.fail @@ Exception (`ClosedSession (`Msg "Peer closed the session unexpectedly"))
-          | _ ->
-            Result.try_get 
-              ~on:(IOBuf.get_char buf)
-              ~run:(fun (b, buf) -> 
-                  match Vle.of_char b with
-                  | c when c <= 0x7fL -> Lwt.return (Vle.logor v (Vle.shift_left c (bc * 7)))
-                  | c  -> 
-                    let x : Vle.t = Vle.shift_left (Vle.logand c  0x7fL)  (bc * 7) in 
-                    extract_length  (Vle.logor v x) (bc + 1) buf)
-              ~fail_with:(fun e -> Lwt.fail @@ Exception e))            
-      ~fail_with:(fun e -> Lwt.fail @@ Exception e)        
+  let rec extract_length (v:Vle.t) (bc:int) (buf: MIOBuf.t) =       
+    try
+      MIOBuf.reset_with 0 1 buf;
+      match%lwt recv sock buf with
+      | 0 -> raise @@ Exception (`ClosedSession (`Msg "Peer closed the session unexpectedly"))
+      | _ ->
+        MIOBuf.reset_with 0 1 buf;
+        let b = MIOBuf.get_char buf in        
+        match Vle.of_char b with
+        | c when c <= 0x7fL -> Lwt.return (Vle.logor v (Vle.shift_left c (bc * 7)))
+        | c  -> 
+          let x : Vle.t = Vle.shift_left (Vle.logand c  0x7fL)  (bc * 7) in 
+          extract_length  (Vle.logor v x) (bc + 1) buf
+      with
+      | e -> raise e
   in extract_length Vle.zero 0 buf 
 
   let write_vle sock buf vle =
-    match encode_vle vle buf with 
-    | Ok buf -> send sock buf
-    | Error e -> Lwt.fail (Apero.Exception e)
+    fast_encode_vle vle buf;
+    MIOBuf.flip buf;
+    send sock buf
+    
 
 let connect socket locator = 
   let saddr = match locator with 
