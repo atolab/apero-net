@@ -1,4 +1,3 @@
-open Apero
 open Iplocator 
 
 module NetServiceWebSock : sig 
@@ -27,7 +26,7 @@ module NetServiceWebSock : sig
    type config = WebSockConfig.t
    type t                      
    val make : config -> t
-   val start : t -> (IOBuf.t -> IOBuf.t -> Websocket_lwt.Connected_client.t -> unit Lwt.t) -> unit Lwt.t 
+   val start : t -> (Abuf.t -> Abuf.t -> Websocket_lwt.Connected_client.t -> unit Lwt.t) -> unit Lwt.t 
    val stop : t -> unit Lwt.t 
    val config : t -> config 
       
