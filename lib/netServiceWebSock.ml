@@ -1,4 +1,3 @@
-open Apero
 open Iplocator 
 open Endpoint
 
@@ -68,8 +67,8 @@ module NetServiceWebSock = struct
         let safe_handler client = 
             Lwt.catch (fun () -> 
                 let len = 64*1024 in 
-                let rbuf = IOBuf.create ~grow:len len in 
-                let wbuf = IOBuf.create ~grow:len len in 
+                let rbuf = Abuf.create ~grow:len len in 
+                let wbuf = Abuf.create ~grow:len len in 
                 handle_session rbuf wbuf client handler)
                       (fun ex -> Lwt.return @@ on_exception ex)
         in            
