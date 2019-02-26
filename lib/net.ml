@@ -52,7 +52,7 @@ let read_vle sock =
 
 let write_vle sock vle =
   let buf = Abuf.create_bytes 8 in
-  encode_vle vle buf;
+  fast_encode_vle vle buf;
   write_all sock buf
 
 let safe_close fd =
