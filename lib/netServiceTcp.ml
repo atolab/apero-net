@@ -42,13 +42,14 @@ module NetServiceTcp = struct
 
     module Config = TcpConfig
     open NetService 
-    type io_service = TxSession.t -> unit -> unit Lwt.t
-    type svc_state = [`Run | `CloseSession | `StopService]
+    type 'a io_init = TxSession.t -> 'a Lwt.t
+    type 'a io_service = TxSession.t -> 'a -> 'a Lwt.t
+    type 'a svc_state = [`Run of 'a | `CloseSession | `StopService]
     type config = Config.t
 
     module ConnectionMap = Map.Make(Id)
 
-    type t = {
+    type 'a t = {
       socket : Lwt_unix.file_descr      
     ; waiter : unit Lwt.t
     ; notifier : unit Lwt.u      
@@ -56,7 +57,8 @@ module NetServiceTcp = struct
     ; mutable connections_count : Int64.t 
     ; mutable connections : (Lwt_unix.file_descr ConnectionMap.t) 
     ; config : Config.t
-    ; mutable io_svc : io_service }
+    ; mutable io_svc : 'a io_service
+    ; mutable io_init : 'a io_init }
 
     let mtu = Unlimited
 
@@ -96,29 +98,30 @@ module NetServiceTcp = struct
 
     let yield_period = 42
 
-    let make_connection_context (sock:Lwt_unix.file_descr) (svc:t) (sid: Id.t) (io_svc: io_service) =       
+    let make_connection_context (sock:Lwt_unix.file_descr) (svc:'a t) (sid: Id.t) (io_init: 'a io_init) (io_svc: 'a io_service) =       
       let%lwt _ = Logs_lwt.info (fun m -> m "Serving tx-session with Id: %s" (Id.to_string sid)) in 
+
       let (wait_close, notifier)  = Lwt.wait () in 
       let (wait_remote_close, notify_remote_close)  = Lwt.wait () in 
-      let s : svc_state = `CloseSession in 
+      let s : 'a svc_state = `CloseSession in 
       let close_session () = Lwt.wakeup notifier s; Lwt.return_unit in 
 
-      let sctx = TxSession.make ~close:(close_session) ~wait_on_close:(wait_remote_close) ~mtu:Unlimited sid sock in      
+      let sctx = TxSession.make ~close:(close_session) ~wait_on_close:(wait_remote_close) ~mtu:Unlimited sid sock in 
+      let%lwt init = io_init sctx in
 
       let serve = fun () ->
         let mio_svc = io_svc sctx in     
 
-        let rec loop c = 
-          let r : svc_state = `Run in
-          let continue = mio_svc ()  >>= fun () -> (if c = 0 then Lwt.pause () else Lwt.return_unit) >>= fun () -> Lwt.return r in 
+        let rec loop c accu = 
+          let continue = mio_svc accu >>= fun accu -> (if c = 0 then Lwt.pause () else Lwt.return_unit) >>= fun () -> Lwt.return (`Run accu) in 
           Lwt.choose [continue; wait_close] >>= function 
-          | `Run -> loop ((c + 1) mod yield_period)
+          | `Run accu -> loop ((c + 1) mod yield_period) accu
           | _ ->  
             Logs_lwt.info (fun m -> m "Closing tx-session %s " (Id.to_string sid)) 
             >>= fun _ -> unregister_connection svc sid 
-            >>= fun _ -> Lwt.return_unit
+            >>= fun _ -> Lwt.return accu
         in 
-        Lwt.catch (fun () -> loop 1) 
+        Lwt.catch (fun () -> loop 1 init >>= fun _ -> Lwt.return_unit) 
           (fun e -> 
             Logs_lwt.warn (fun m -> m "Closing tx-session %s because of %s" (Id.to_string sid) (Printexc.to_string e))
             >>= fun _ -> Lwt.wakeup_later notify_remote_close true;
@@ -126,11 +129,11 @@ module NetServiceTcp = struct
             >>= fun _ -> Lwt.return_unit)
       in Lwt.return (sctx, serve)
 
-    let serve_connection (sock:Lwt_unix.file_descr) (svc:t) (sid: Id.t) (io_svc: io_service) =   
-      let%lwt (_, serve) = make_connection_context sock svc sid io_svc in serve ()
+    let serve_connection (sock:Lwt_unix.file_descr) (svc:'a t) (sid: Id.t) (io_init: 'a io_init) (io_svc: 'a io_service) =   
+      let%lwt (_, serve) = make_connection_context sock svc sid io_init io_svc in serve ()
       
 
-    let make config  = 
+    let make config = 
       let socket = create_server_socket config in 
       let (waiter, notifier) = Lwt.wait () in 
       { 
@@ -141,17 +144,19 @@ module NetServiceTcp = struct
       ; connections_count =  Int64.zero
       ; connections = (ConnectionMap.empty) 
       ; config 
-      ; io_svc = fun _ _ -> Lwt.return_unit} 
+      ; io_svc = (fun _ _ -> raise (Exception(`IOError(`Msg("Uninitialized io service")))))
+      ; io_init = (fun _ -> raise (Exception(`IOError(`Msg("Uninitialized io service")))))} 
 
 
 
-    let start (svc : t) io_svc =       
+    let start (svc : 'a t) io_init io_svc = 
       let%lwt _ = 
         Logs_lwt.info (fun m -> m "Starting TcpService at %s with svc-id %d " 
                            (TcpLocator.to_string @@ Config.locator svc.config) 
                            (Config.svc_id svc.config)) in 
 
       svc.io_svc <- io_svc;
+      svc.io_init <- io_init;
       let stop = svc.waiter >|= fun () -> `Stop in 
 
       let rec accept_connection svc =         
@@ -166,7 +171,7 @@ module NetServiceTcp = struct
             | `Accept (sock, _) ->              
               (match%lwt register_connection svc sock with 
                | Ok sid -> 
-                 let _ = serve_connection sock svc sid io_svc                
+                 let _ = serve_connection sock svc sid io_init io_svc
                  in accept_connection svc                    
                | Error e ->                   
                  let%lwt _ = Logs_lwt.warn (fun m -> m "%s" @@ show_error e) 
@@ -200,14 +205,14 @@ module NetServiceTcp = struct
       let psid = connect sock saddr >>= fun () -> register_connection svc sock in 
       match%lwt psid with 
       | Ok sid ->         
-        let%lwt (txs, serve) = make_connection_context sock svc sid svc.io_svc in 
+        let%lwt (txs, serve) = make_connection_context sock svc sid svc.io_init svc.io_svc in 
         let _ = serve () in Lwt.return txs          
       
       | Error e -> Lwt.fail @@ Exception e
 
-    let establish_session (svc:t) locator =  
+    let establish_session (svc: 'a t) locator =  
       match locator with 
-      | Locator.Locator.TcpLocator tcplocator -> establish_tcp_session svc tcplocator      
+      | Locator.Locator.TcpLocator tcplocator -> establish_tcp_session svc tcplocator
       |_ ->  Lwt.fail_with "Invalid Locator"
     
 end

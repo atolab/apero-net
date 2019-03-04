@@ -45,7 +45,7 @@ let writer sock =
     Lwt.return_unit
   | _ -> Lwt.return_unit
   
-let run_echo_service reader writer (svc:EchoService.t) (sex : TxSession.t) =
+let run_echo_service reader writer (svc: 'a EchoService.t) (sex: TxSession.t) =
   let sock = TxSession.socket sex in 
   let mreader = reader sock in 
   let mwriter = writer sock in 
@@ -78,5 +78,5 @@ let setup_log =
 let () =
   let _ = Term.(eval (setup_log, Term.info "tool")) in  
   let svc = EchoService.make config  in   
-  Lwt_main.run (EchoService.start svc (run_echo_service reader writer svc)) 
+  Lwt_main.run (EchoService.start svc (fun _ -> Lwt.return_unit) (run_echo_service reader writer svc)) 
   

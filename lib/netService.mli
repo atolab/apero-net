@@ -17,17 +17,18 @@ module TxSession : sig
 end
 
 
-module type S = sig           
-  type io_service = TxSession.t -> unit -> unit Lwt.t
+module type S = sig 
+  type 'a io_init = TxSession.t -> 'a Lwt.t
+  type 'a io_service = TxSession.t -> 'a -> 'a Lwt.t
   type config 
-  type t                      
-  val make : config -> t
+  type 'a t                      
+  val make : config -> 'a t
   val mtu : mtu                         
-  val start : t -> io_service -> unit Lwt.t 
-  val stop : t -> unit Lwt.t 
-  val config : t -> config 
-  val socket : t -> Lwt_unix.file_descr
-  val establish_session : t -> Locator.Locator.t -> TxSession.t Lwt.t 
+  val start : 'a t -> 'a io_init -> 'a io_service -> unit Lwt.t 
+  val stop : 'a t -> unit Lwt.t 
+  val config : 'a t -> config 
+  val socket : 'a t -> Lwt_unix.file_descr
+  val establish_session : 'a t -> Locator.Locator.t -> TxSession.t Lwt.t 
 end
 
 (* 
