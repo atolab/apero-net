@@ -24,7 +24,7 @@ depends: [
   "uuidm" 
   "yojson"
   "lwt_ppx"
-  "apero-core" {>= "0.4.4"}
+  "apero-core" {>= "0.4.5"}
   "websocket" {>= "2.12"}
   "websocket-lwt" {>= "2.12"}
 ]
