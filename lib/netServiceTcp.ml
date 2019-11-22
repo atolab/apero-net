@@ -99,7 +99,7 @@ module NetServiceTcp = struct
     let yield_period = 42
 
     let make_connection_context (sock:Lwt_unix.file_descr) (svc:'a t) (sid: Id.t) (io_init: 'a io_init) (io_svc: 'a io_service) =       
-      let%lwt _ = Logs_lwt.info (fun m -> m "Serving tx-session with Id: %s" (Id.to_string sid)) in 
+      let%lwt _ = Logs_lwt.debug (fun m -> m "Serving tx-session with Id: %s" (Id.to_string sid)) in 
 
       let (wait_close, notifier)  = Lwt.wait () in 
       let (wait_remote_close, notify_remote_close)  = Lwt.wait () in 
@@ -117,13 +117,13 @@ module NetServiceTcp = struct
           Lwt.choose [continue; wait_close] >>= function 
           | `Run accu -> loop ((c + 1) mod yield_period) accu
           | _ ->  
-            Logs_lwt.info (fun m -> m "Closing tx-session %s " (Id.to_string sid)) 
+            Logs_lwt.debug (fun m -> m "Closing tx-session %s " (Id.to_string sid)) 
             >>= fun _ -> unregister_connection svc sid 
             >>= fun _ -> Lwt.return accu
         in 
         Lwt.catch (fun () -> loop 1 init >>= fun _ -> Lwt.return_unit) 
           (fun e -> 
-            Logs_lwt.warn (fun m -> m "Closing tx-session %s because of %s" (Id.to_string sid) (Printexc.to_string e))
+            Logs_lwt.warn (fun m -> m "Closing tx-session %s because of %s %s" (Id.to_string sid) (Printexc.to_string e) (Printexc.get_backtrace ()))
             >>= fun _ -> Lwt.wakeup_later notify_remote_close true;
                          unregister_connection svc sid
             >>= fun _ -> Lwt.return_unit)
@@ -150,11 +150,10 @@ module NetServiceTcp = struct
 
 
     let start (svc : 'a t) io_init io_svc = 
-      let%lwt _ = 
-        Logs_lwt.info (fun m -> m "Starting TcpService at %s with svc-id %d " 
-                           (TcpLocator.to_string @@ Config.locator svc.config) 
-                           (Config.svc_id svc.config)) in 
-
+      let%lwt _ = Logs_lwt.debug (fun m -> m "Starting TcpService with svc-id %d " 
+                                (Config.svc_id svc.config)) in 
+      let%lwt _ = Logs_lwt.info (fun m -> m "TcpService listening on port %s" 
+                                (TcpLocator.to_string @@ Config.locator svc.config)) in 
       svc.io_svc <- io_svc;
       svc.io_init <- io_init;
       let stop = svc.waiter >|= fun () -> `Stop in 
@@ -180,7 +179,7 @@ module NetServiceTcp = struct
                  in accept_connection svc)
             | `Stop ->  
 
-              let%lwt _ = Logs_lwt.info (fun m -> m "Stopping svc...") in
+              let%lwt _ = Logs_lwt.debug (fun m -> m "Stopping svc...") in
               let%lwt _ = Net.safe_close svc.socket in               
               let%lwt _ = Logs_lwt.debug (fun m -> m "Closing tx-sessions...") in
               let _ = close_sessions svc in Lwt.return_unit)
