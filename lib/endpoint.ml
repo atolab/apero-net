@@ -14,15 +14,20 @@ module IpEndpoint = struct
   | Lwt_unix.ADDR_INET (a, p) -> {addr = a; port = p}
   | _ -> raise @@ Exception `InvalidAddress
 
-
   let of_string s =     
     let ridx = String.rindex s ':' in
     let len = String.length s in
-    let saddr = String.sub s 0 ridx in
+    let hostname = String.sub s 0 ridx in
     let idx = ridx + 1 in
-    let port = int_of_string (String.sub s idx (len - idx)) in 
-    Some { addr = Unix.inet_addr_of_string saddr ; port = port }
-    
+    let sport = String.sub s idx (len - idx) in
+    let port = int_of_string sport in 
+    let rec get_fst_inet = function
+      | [] -> Some { addr = Unix.inet_addr_of_string hostname ; port}
+      | hd :: tl -> match Unix.(hd.ai_addr) with 
+        | Unix.ADDR_INET (addr, _) -> Some { addr; port}
+        | _ -> get_fst_inet tl in
+    get_fst_inet @@ Unix.getaddrinfo hostname sport [Unix.AI_FAMILY(Unix.PF_INET)]
+
   let to_string e =
     let a = Unix.string_of_inet_addr e.addr in
     Printf.sprintf "%s:%d" a e.port
