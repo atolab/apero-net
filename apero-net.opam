@@ -1,5 +1,5 @@
 opam-version: "2.0"
-version:"0.4.5"
+version:"0.4.6"
 maintainer:   ["contact@adlink-labs.tech"]
 authors:      ["Angelo Corsaro" "Julien Enoch" "Oliver Hecart" "Gabriele Baldoni"]
 homepage:     "https://github.com/atolab"
@@ -9,7 +9,7 @@ dev-repo:     "git+https://github.com/atolab/apero-net.git"
 license: "Apache-2.0"
 
 build: [
-  ["jbuilder" "build" "--only" "apero-net" "--root" "." "-j" jobs "@install"]
+  ["dune" "build" "-p" name "-j" jobs]
 ]
 
 
