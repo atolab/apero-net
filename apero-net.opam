@@ -19,7 +19,7 @@ depends: [
   "cmdliner"
   "fmt" 
   "logs" 
-  "lwt" 
+  "lwt" {< "5.0.0"}
   "ppx_deriving" 
   "uuidm" 
   "yojson"
