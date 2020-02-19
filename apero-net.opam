@@ -1,5 +1,5 @@
 opam-version: "2.0"
-version:"0.4.7"
+version:"0.4.8"
 maintainer:   ["contact@adlink-labs.tech"]
 authors:      ["Angelo Corsaro" "Julien Enoch" "Oliver Hecart" "Gabriele Baldoni"]
 homepage:     "https://github.com/atolab"
@@ -24,7 +24,7 @@ depends: [
   "uuidm" {= "0.9.7" }
   "yojson"  {= "1.7.0" }
   "lwt_ppx"  {= "2.0.0" }
-  "apero-core" {= "0.4.7"}
+  "apero-core" {= "0.4.8"}
   "websocket" {= "2.12"}
   "websocket-lwt" {= "2.12"}
 ]
